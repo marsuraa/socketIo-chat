@@ -24,9 +24,9 @@ npm install
 ## Démarrer les bases de données
 
 ```
-redis sur le 6379
+Lancer redis sur le port 6379
 
-créer un replicaSet mongoDB de nom rs0 et de serveur en localhost 27021,27022,27023 :
+Créer un replicaSet mongoDB de nom rs0 et de serveur en localhost 27021,27022,27023 :
 
 1. Créer un dossier "data" avec comme sous dossier R0S1,R0S2, R0S3 et arbitre
 2. Dans powershell : `mongod --port 27021 --replSet rs0 --dbpath "*path*\data\R0S1"`
