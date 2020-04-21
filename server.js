@@ -10,6 +10,20 @@ client = redis.createClient({
   host : '127.0.0.1',        
 });
 
+
+/* reset le statut des users au démarrage du système*/
+client.hkeys('users', function (err, users) {
+  if (err) return console.log(err);
+  
+  //console.log(users)
+
+
+    users.forEach(function (user) {
+      //console.log(user)
+      client.hset("users", user,"0");
+    });
+});
+
 var MongoClient = require('mongodb').MongoClient;
 var url = 'mongodb://localhost:27021,localhost:27022,localhost:27023/?replicaSet=rs0';
 
@@ -18,7 +32,7 @@ function InsertUserMSG(message){
   MongoClient.connect(url, function(err, db) {
     if (err) throw err;
     currentDate = new Date(Date.now()).toISOString();
-    console.log(currentDate)
+    //console.log(currentDate)
     let document={
       'username' : message.username,
       'text' : message.text,
@@ -37,7 +51,7 @@ function InsertSysMSG(message){
   MongoClient.connect(url, function(err, db) {
     if (err) throw err;
     currentDate = new Date(Date.now()).toISOString();
-    console.log(currentDate)
+    //console.log(currentDate)
     let document={
       'text' : message.text,
       'type' : message.type,
@@ -52,43 +66,41 @@ function InsertSysMSG(message){
 });
 }
 
- 
 
-/*
-client.hkeys('test', function (err, users) {
-  if (err) return console.log(err);
-  console.log(users)
+function GetOldUserMessages(socket){
   
-});  
+  MongoClient.connect(url, function(err, db) {
+    if (err) throw err;
+    var dbo = db.db("SocketIO_Chat");
+    dbo.collection('UserMessages').find().sort({"at_date":1}).toArray(function(err, result) {  
+      if (err) throw err;  
+        for (i = 0; i < result.length; i++) {
+          
+          if (result[i].username!== undefined) {
+            socket.emit('chat-old-message', result[i]);
+        }
+      }
+      db.close(); 
+      
+      });  
+  });
+  
+}
 
-client.hget('test','michel', function (error, result) {
-  if (error) {
-      console.log(error);
-      throw error;
-  }
-  console.log(result);
-});
-*/
-/*client.hgetall('users',function (err, users) {
-  for(var i = 0, len = users.length; i < len; i++) {
-    console.log(users[i]);
-  }
-});*/
+
+
+
 
 /**
  * Gestion des requêtes HTTP des utilisateurs en leur renvoyant les fichiers du dossier 'public'
  */
 app.use('/', express.static(__dirname + '/public'));
 
-/**
- * Liste des utilisateurs connectés
- */
-//var users = [];
 
 /**
- * Historique des messages
+ * route vers les statistique générales.
  */
-var messages = [];
+app.use('/stats', express.static(__dirname + '/stats'));
 
 /**
  * Liste des utilisateurs en train de saisir un message
@@ -111,11 +123,11 @@ io.on('connection', function (socket) {
   client.hkeys('users', function (err, users) {
     if (err) return console.log(err);
     
-    console.log(users)
+    //console.log(users)
 
 
       users.forEach(function (user) {
-        console.log(user)
+        //console.log(user)
         client.hget("users", user, function(e, o) {
             if (e) {console.log(e)}
             if (o =="1")
@@ -128,18 +140,12 @@ io.on('connection', function (socket) {
         });
       });
       
-  });  
-
+  });
+  
   /** 
    * Emission d'un événement "chat-message" pour chaque message de l'historique
    */
-  for (i = 0; i < messages.length; i++) {
-    if (messages[i].username !== undefined) {
-      socket.emit('chat-message', messages[i]);
-    } else {
-      socket.emit('service-message', messages[i]);
-    }
-  }
+  GetOldUserMessages(socket);
 
   /**
    * Déconnexion d'un utilisateur
@@ -153,6 +159,7 @@ io.on('connection', function (socket) {
         type: 'logout'
       };
       socket.broadcast.emit('service-message', serviceMessage);
+      
 
 
       client.hset('users',loggedUser.username, "0",function (error, result) {
@@ -164,7 +171,7 @@ io.on('connection', function (socket) {
       });
 
       // Ajout du message à l'historique
-      messages.push(serviceMessage);
+      InsertSysMSG(serviceMessage)
       // Emission d'un 'user-logout' contenant le user
       io.emit('user-logout', loggedUser);
       // Si jamais il était en train de saisir un texte, on l'enlève de la liste
@@ -184,7 +191,7 @@ io.on('connection', function (socket) {
     client.hexists('users',user.username,function(err, reply) {
       if (reply === 1) 
       {
-          console.log('exists');
+          //console.log('exists');
           client.hget('users',user.username, function (error, result) 
           {
             if (error) 
@@ -196,7 +203,7 @@ io.on('connection', function (socket) {
             if (result !="0")
             {
               console.log('déjà co');
-              console.log(result);
+              //console.log(result);
               callback(false);
             }
             else
@@ -221,7 +228,7 @@ io.on('connection', function (socket) {
                 console.log(error);
                 throw error;
             }
-            console.log(result);
+            //console.log(result);
             loggedUser = user;
           });
       }
@@ -239,7 +246,7 @@ io.on('connection', function (socket) {
         };
         socket.emit('service-message', userServiceMessage);
         socket.broadcast.emit('service-message', broadcastedServiceMessage);
-        messages.push(broadcastedServiceMessage);
+        //messages.push(broadcastedServiceMessage);
         InsertSysMSG(broadcastedServiceMessage)
         // Emission de 'user-login' et appel du callback
         console.log("user-login emit " + loggedUser.username)
@@ -263,10 +270,16 @@ io.on('connection', function (socket) {
     io.emit('chat-message', message);
     // Sauvegarde du message
     InsertUserMSG(message)
-    messages.push(message);
-    if (messages.length > 150) {
+    //messages.push(message);
+    /*if (messages.length > 150) {
       messages.splice(0, 1);
-    }
+    }*/
+  });
+
+  socket.on('chat-old-message', function (message) {
+    // On ajoute le username au message et on émet l'événement
+    message.username = loggedUser.username;
+    io.emit('chat-old-message', message);
   });
 
   /**
@@ -300,3 +313,30 @@ io.on('connection', function (socket) {
 http.listen(3000, function () {
   console.log('Server is listening on *:3000');
 });
+
+
+
+
+
+
+
+/*
+client.hkeys('test', function (err, users) {
+  if (err) return console.log(err);
+  console.log(users)
+  
+});  
+
+client.hget('test','michel', function (error, result) {
+  if (error) {
+      console.log(error);
+      throw error;
+  }
+  console.log(result);
+});
+*/
+/*client.hgetall('users',function (err, users) {
+  for(var i = 0, len = users.length; i < len; i++) {
+    console.log(users[i]);
+  }
+});*/
