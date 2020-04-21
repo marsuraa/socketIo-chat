@@ -98,11 +98,6 @@ app.use('/', express.static(__dirname + '/public'));
 
 
 /**
- * route vers les statistique générales.
- */
-app.use('/stats', express.static(__dirname + '/stats'));
-
-/**
  * Liste des utilisateurs en train de saisir un message
  */
 var typingUsers = [];
