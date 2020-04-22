@@ -8,6 +8,9 @@ Possibilité d'ajout :
 - la gestion de salons.
 
 
+IMPORTANT : Cliquez deux fois sur login quand vous avez renseigné votre pseudo si vous voulez accéder au chat. 
+Cela doit être dû au fait que les requêtes REDIS sont en async donc certaines opérations se font avant le résulat des requêtes.
+
 ## Installation
 ```
 npm install
