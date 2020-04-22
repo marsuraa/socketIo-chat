@@ -122,7 +122,6 @@ socket.on('update-typing', function (typingUsers) {
 });
 
 
-//console.log('kjhfguvd');
 $('#users').append($('<li class="all-stats">').html('<p> Statistiques du Serveur :</p>'));
 $('#users').append($('<li class="room-stats">'));
 $('#users').append($('<li class="users-alltime-stats">'));

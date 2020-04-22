@@ -31,7 +31,7 @@ client.hkeys('users', function (err, users) {
     
     users.forEach(function (user) {
         //console.log(user)
-        allTimeBestScore.set(user,0);
+        allTimeBestScore.set(user,0); //ajoute tous les utilisateurs existants de la base
         client.hset("users", user, "0");
     });
 });
@@ -41,15 +41,17 @@ client.hkeys('users', function (err, users) {
 
 /** Insert les messages émis par les users dans la collection UserMessages */
 function InsertUserMSG(message) {
+    //incrémente le nombre de message dans la session en cours
     score = sessionBestScore.get(message.username);
-    //console.log(score++);
     score++;
     sessionBestScore.set(message.username, score);
 
+    //incrémente le nombre de message pour les stats du serveur
     allTimescore = allTimeBestScore.get(message.username);
     allTimescore++;
     allTimeBestScore.set(message.username,allTimescore);
-    
+
+    //insère les messages des utilisateurs dans dans mongodb
     MongoClient.connect(url, function (err, db) {
         if (err) throw err;
         currentDate = new Date(Date.now()).toISOString();
@@ -66,6 +68,8 @@ function InsertUserMSG(message) {
             db.close();
         });
     });
+
+    //appelle les fonctions pour update les stats à chaque messages des utilisateurs
     updateSessionBestScore(io);
     updateAllTimeBestScore(io);
 }
@@ -91,7 +95,9 @@ function InsertSysMSG(message) {
 }
 
 
-/** recherche tout les messages dans  UserMessages et tri par date croissante*/
+/** recherche tout les messages dans  UserMessages et tri par date croissante
+ * puis emet sur le socket 
+*/
 function GetOldUserMessages(socket) {
 
     MongoClient.connect(url, function (err, db) {
@@ -102,6 +108,10 @@ function GetOldUserMessages(socket) {
             for (oldMsg of result) {
                 if(getOneTime)
                 {
+                    /*getOneTime permet d'effectuer une seule fois cet incrément
+                    * car cette fonction est appelé à chaque connexion.
+                    *On fait donc en sorte d'avoir les valeurs une seule fois
+                    */
                     score = allTimeBestScore.get(oldMsg.username);
                     score++;
                     allTimeBestScore.set(oldMsg.username,score);
@@ -120,12 +130,12 @@ function GetOldUserMessages(socket) {
 
 }
 
-
-
+//envoie à tous les users pour l'update du nb de users connectés
 function nbgetNbUserconnected(io) {
     io.emit('update-room-stats', nbUserConnected);
 }
 
+//envoie à tous les users pour l'update des stats de la session en cours
 function updateSessionBestScore(io) {
     sessionBestScore[Symbol.iterator] = function* () {
         yield* [...this.entries()].sort((a, b) => b[1] - a[1]);
@@ -138,6 +148,7 @@ function updateSessionBestScore(io) {
     io.emit('update-users-session-stats', string);
 }
 
+//envoie à tous les users pour l'update des stats générales du serveur
 function updateAllTimeBestScore(io) {
     allTimeBestScore[Symbol.iterator] = function* () {
         yield* [...this.entries()].sort((a, b) => b[1] - a[1]);
@@ -173,6 +184,7 @@ io.on('connection', function (socket) {
      * Emission d'un événement "user-login" pour chaque utilisateur connecté
      */
 
+    //incrément du nb de users connectés et appel de la fonction pour update les stats
     nbUserConnected++;
     nbgetNbUserconnected(io);
 
@@ -187,7 +199,7 @@ io.on('connection', function (socket) {
             client.hget("users", user, function (e, o) {
                 if (e) { console.log(e) }
                 if (o == "1") {
-                    console.log("user-login " + user)
+                    //console.log("user-login " + user)
                     socket.emit('user-login', user);
 
                 }
@@ -216,7 +228,7 @@ io.on('connection', function (socket) {
             socket.broadcast.emit('service-message', serviceMessage);
 
 
-
+            //set la valeur à 0 dans redis
             client.hset('users', loggedUser.username, "0", function (error, result) {
                 if (error) {
                     console.log(error);
@@ -235,6 +247,7 @@ io.on('connection', function (socket) {
                 typingUsers.splice(typingUserIndex, 1);
             }
         }
+        //décrément du nb de users connectés et appel de la fonction pour update les stats
         nbUserConnected--;
         nbgetNbUserconnected(io);
     });
@@ -244,10 +257,10 @@ io.on('connection', function (socket) {
      */
     socket.on('user-login', function (user, callback) {
 
-        console.log("passage");
+        //console.log("passage");
         client.hexists('users', user.username, function (err, reply) {
             if (reply === 1) {
-                console.log('exists');
+                //console.log('exists');
                 client.hget('users', user.username, function (error, result) {
                     if (error) {
                         console.log(error);
@@ -257,13 +270,13 @@ io.on('connection', function (socket) {
                     else {
 
                         if (result != "0") {
-                            console.log('déjà co');
+                            //console.log('déjà co');
                             //console.log(result);
                             callback(false);
                         }
                         else {
                             client.hset('users', user.username, "1");
-                            console.log("passage à 1");
+                            //console.log("passage à 1");
                             callback(true);
 
                             loggedUser = user;
@@ -275,8 +288,8 @@ io.on('connection', function (socket) {
 
 
             } else {
-                console.log('doesn\'t exist');
-
+                //console.log('doesn\'t exist');
+                allTimeBestScore.set(user.username,0);
                 client.hset('users', user.username, "1", function (error, result) {
                     if (error) {
                         console.log(error);
@@ -306,11 +319,12 @@ io.on('connection', function (socket) {
                 //console.log("user-login emit " + loggedUser.username)
                 io.emit('user-login', loggedUser.username);
                 sessionBestScore.set(loggedUser.username, 0);
+                
                 callback(true);
                 
             }
             else {
-                console.log("pas nouveau nouveau");
+                //console.log("pas nouveau nouveau");
                 callback(false);
             }
         });
@@ -371,29 +385,3 @@ http.listen(3000, function () {
     console.log('Server is listening on *:3000');
 });
 
-
-
-
-
-
-
-/*
-client.hkeys('test', function (err, users) {
-  if (err) return console.log(err);
-  console.log(users)
-
-});
-
-client.hget('test','michel', function (error, result) {
-  if (error) {
-      console.log(error);
-      throw error;
-  }
-  console.log(result);
-});
-*/
-/*client.hgetall('users',function (err, users) {
-  for(var i = 0, len = users.length; i < len; i++) {
-    console.log(users[i]);
-  }
-});*/

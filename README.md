@@ -2,11 +2,10 @@
 - La gestion des utilisateurs connectés grâce à Redis fonctionne
 - Le stockage des messages utilisateurs sur MongoDB : ok
 - Le stockage des messages Systeme sur MongoDB dans une autre collection : les messages log-out ne sont pas encore insérés
+- les statistiques pour savoir quels sont les meilleurs utilisateurs du serveur en général et celles de la session en cours
 
-Reste à faire :
-- Les statistiques sur les utilisateurs, la fréquence de msg etc.
+Possibilité d'ajout :
 - la gestion de salons.
-- commenter les code et enlever, tous les tests.
 
 
 ## Installation
