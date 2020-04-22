@@ -2,14 +2,6 @@
 var socket = io();
 var i;
 
-
-
-
-
-
-
-
-
 /**
  * Scroll vers le bas de page si l'utilisateur n'est pas remonté pour lire d'anciens messages
  */
@@ -18,10 +10,6 @@ function scrollToBottom() {
     $('html, body').animate({ scrollTop: $(document).height() }, 0);
   }
 }
-
-
-
-
 
 /*** Gestion des événements ***/
 
@@ -84,7 +72,7 @@ socket.on('service-message', function (message) {
  * Connexion d'un nouvel utilisateur
  */
 socket.on('user-login', function (user) {
-  console.log("ajout à la liste de " + user)
+  //console.log("ajout à la liste de " + user)
   $('#users').append($('<li class="' + user + ' new">').html(user + '<span class="typing">typing</span>'));
   setTimeout(function () {
     $('#users li.new').removeClass('new');
@@ -134,15 +122,31 @@ socket.on('update-typing', function (typingUsers) {
 });
 
 
-console.log('kjhfguvd');
+//console.log('kjhfguvd');
+$('#users').append($('<li class="all-stats">').html('<p> Statistiques du Serveur :</p>'));
 $('#users').append($('<li class="room-stats">'));
-$('#users').append($('<li class="users-stats">'));
+$('#users').append($('<li class="users-alltime-stats">'));
+$('#users').append($('<li class="users-session-stats">'));
 
-socket.on('update-users-stats', function (data) {
-  $('#users li.room-stats').html('<p>' + data+'</p>');
+$('#users').append($('<li class="users-list">').html('<p> Liste des Users : </p>'));
+
+
+
+socket.on('update-users-alltime-stats', function (data) {
+  
+  
+
+  $('#users li.users-alltime-stats').html('<p> Top Users de tous les temps : <p> '+data+' </p>');
+});
+
+socket.on('update-users-session-stats', function (data) {
+  
+  
+
+  $('#users li.users-session-stats').html('<p> Top Users de la session : <p> '+data+' </p>');
 });
 
 socket.on('update-room-stats', function (data) {
-  $('#users li.room-stats').html('<p>' + data+'</p>');
-  $('#users li.users-stats').html('allo');
+  $('#users li.room-stats').html('<p> Utilisateurs connectés : ' + data+'</p>');
+  
 });

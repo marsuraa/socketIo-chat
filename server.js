@@ -3,6 +3,11 @@ var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var i;
+var nbUserConnected = 0;
+var sessionBestScore = new Map();
+var allTimeBestScore = new Map();
+
+var getOneTime = true;
 
 
 /** client REDIS */
@@ -10,7 +15,7 @@ var redis = require('redis'),
     client = redis.createClient({
         port: 6379,
         host: '127.0.0.1',
-});
+    });
 
 /** client MONGODB */
 var MongoClient = require('mongodb').MongoClient;
@@ -23,9 +28,10 @@ client.hkeys('users', function (err, users) {
 
     //console.log(users)
 
-
+    
     users.forEach(function (user) {
         //console.log(user)
+        allTimeBestScore.set(user,0);
         client.hset("users", user, "0");
     });
 });
@@ -35,6 +41,15 @@ client.hkeys('users', function (err, users) {
 
 /** Insert les messages émis par les users dans la collection UserMessages */
 function InsertUserMSG(message) {
+    score = sessionBestScore.get(message.username);
+    //console.log(score++);
+    score++;
+    sessionBestScore.set(message.username, score);
+
+    allTimescore = allTimeBestScore.get(message.username);
+    allTimescore++;
+    allTimeBestScore.set(message.username,allTimescore);
+    
     MongoClient.connect(url, function (err, db) {
         if (err) throw err;
         currentDate = new Date(Date.now()).toISOString();
@@ -51,6 +66,8 @@ function InsertUserMSG(message) {
             db.close();
         });
     });
+    updateSessionBestScore(io);
+    updateAllTimeBestScore(io);
 }
 
 /** Insert les messages émis par les users dans la collection SysMessages */
@@ -82,88 +99,56 @@ function GetOldUserMessages(socket) {
         var dbo = db.db("SocketIO_Chat");
         dbo.collection('UserMessages').find().sort({ "at_date": 1 }).toArray(function (err, result) {
             if (err) throw err;
-            for (oldMsg of result)
-            {
-                socket.emit('chat-old-message',oldMsg);
-            }
-            
-            db.close();
-            
-        });
-    });
-
-
-
-}
-
-
-
-function nbgetNbUserconnected(socket)
-{
-    var promises =[];
-    var nbUserConnected = 0;
-    
-    promises.push( new Promise( function(resolve,reject) {
-        client.hkeys('users',function (err, users) {
-        
-            if (err) return console.log(err);
-            for (var user of users) {
-                //console.log(user)
-                client.hget("users", user,function (e, o) {
-                    if (e) { console.log(e) }
-                    if (o == "1") {
-                        nbUserConnected = nbUserConnected + 1;
-                        console.log("++");
-                        console.log(nbUserConnected);
-                        
-                    }
-                });
-            };
-            console.log(nbUserConnected+ "         ae,fdnjg")
-            resolve (nbUserConnected);
-        });
-    } ) );
-    
-    Promise.all(promises).then( function(values) {
-        socket.broadcast.emit('update-room-stats', values[0]);
-    } ).catch();
-    
-    
-    
-}
-
-function updateStats(socket) {
-
-    nbgetNbUserconnected(socket);
-
-
-    
-    /*MongoClient.connect(url, function (err, db) {
-        var usersBestScore = [];
-        if (err) throw err;
-        var dbo = db.db("SocketIO_Chat");
-
-        var aggregatorOpts = [{
-            $group:
+            for (oldMsg of result) {
+                if(getOneTime)
                 {
-                _id: "$username",
-                nbMessage :{$sum : 1}
-                
+                    score = allTimeBestScore.get(oldMsg.username);
+                    score++;
+                    allTimeBestScore.set(oldMsg.username,score);
                 }
-           }]
-            dbo.collection('UserMessages').aggregate(aggregatorOpts).limit(3).toArray(function (err, result) {
-            if (err) throw err;
-            usersBestScore = result;
+                
+                socket.emit('chat-old-message', oldMsg);
+            }
+            getOneTime = false;
+
             db.close();
 
         });
-        io.emit('update-users-stats', usersBestScore);
     });
-    */
-    
+
+
 
 }
 
+
+
+function nbgetNbUserconnected(io) {
+    io.emit('update-room-stats', nbUserConnected);
+}
+
+function updateSessionBestScore(io) {
+    sessionBestScore[Symbol.iterator] = function* () {
+        yield* [...this.entries()].sort((a, b) => b[1] - a[1]);
+    }
+    var string = "";
+    for (var [username, nbmsg] of sessionBestScore) {
+        string += username + " : " + nbmsg + " msg </br>";
+        //console.log(username + " : " + nbmsg);
+    }
+    io.emit('update-users-session-stats', string);
+}
+
+function updateAllTimeBestScore(io) {
+    allTimeBestScore[Symbol.iterator] = function* () {
+        yield* [...this.entries()].sort((a, b) => b[1] - a[1]);
+    }
+    var string = "";
+    for (var [username, nbmsg] of allTimeBestScore) {
+        string += username + " : " + nbmsg + " msg </br>";
+        //console.log(username + " : " + nbmsg);
+    }
+    io.emit('update-users-alltime-stats', string);
+}
 
 /**
  * Gestion des requêtes HTTP des utilisateurs en leur renvoyant les fichiers du dossier 'public'
@@ -177,17 +162,19 @@ app.use('/', express.static(__dirname + '/public'));
 var typingUsers = [];
 
 io.on('connection', function (socket) {
-    updateStats(socket);
     /**
      * Utilisateur connecté à la socket
      */
     var loggedUser;
+    
 
 
     /**
      * Emission d'un événement "user-login" pour chaque utilisateur connecté
      */
 
+    nbUserConnected++;
+    nbgetNbUserconnected(io);
 
     client.hkeys('users', function (err, users) {
         if (err) return console.log(err);
@@ -248,7 +235,8 @@ io.on('connection', function (socket) {
                 typingUsers.splice(typingUserIndex, 1);
             }
         }
-        updateStats(socket)
+        nbUserConnected--;
+        nbgetNbUserconnected(io);
     });
 
     /**
@@ -256,30 +244,32 @@ io.on('connection', function (socket) {
      */
     socket.on('user-login', function (user, callback) {
 
-
+        console.log("passage");
         client.hexists('users', user.username, function (err, reply) {
             if (reply === 1) {
-                //console.log('exists');
+                console.log('exists');
                 client.hget('users', user.username, function (error, result) {
                     if (error) {
                         console.log(error);
                         throw error;
 
                     }
-                    if (result != "0") {
-                        console.log('déjà co');
-                        //console.log(result);
-                        callback(false);
-                    }
                     else {
-                        client.hset('users', user.username, "1", function (error, result) {
-                            if (error) {
-                                console.log(error);
-                                throw error;
-                            }
-                        });
-                        loggedUser = user;
+
+                        if (result != "0") {
+                            console.log('déjà co');
+                            //console.log(result);
+                            callback(false);
+                        }
+                        else {
+                            client.hset('users', user.username, "1");
+                            console.log("passage à 1");
+                            callback(true);
+
+                            loggedUser = user;
+                        }
                     }
+
 
                 });
 
@@ -299,6 +289,7 @@ io.on('connection', function (socket) {
 
             if (loggedUser !== undefined) { // S'il est bien nouveau
                 // Envoi et sauvegarde des messages de service
+                console.log("diff de und");
                 var userServiceMessage = {
                     text: 'You logged in as "' + loggedUser.username + '"',
                     type: 'login'
@@ -312,15 +303,18 @@ io.on('connection', function (socket) {
                 //messages.push(broadcastedServiceMessage);
                 InsertSysMSG(broadcastedServiceMessage)
                 // Emission de 'user-login' et appel du callback
-                console.log("user-login emit " + loggedUser.username)
+                //console.log("user-login emit " + loggedUser.username)
                 io.emit('user-login', loggedUser.username);
+                sessionBestScore.set(loggedUser.username, 0);
                 callback(true);
+                
             }
             else {
+                console.log("pas nouveau nouveau");
                 callback(false);
             }
         });
-        updateStats(socket)
+
     });
 
     /**
@@ -332,8 +326,6 @@ io.on('connection', function (socket) {
         io.emit('chat-message', message);
         // Sauvegarde du message
         InsertUserMSG(message)
-
-        updateStats(socket)
     });
 
 
