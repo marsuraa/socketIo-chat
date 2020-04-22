@@ -86,7 +86,7 @@ section#chat #messages li span.info {
 	background: #e67e22;
 	border-radius: 5px;
 }
-section#chat #users {
+section#chat #users,#room-stat,#users-stats{
     display: inline-block;
     position: fixed;
     vertical-align: top;
@@ -97,11 +97,11 @@ section#chat #users {
     padding-bottom: 50px;
     border-left: 3px solid #eee;
 }
-section#chat #users li.new {
+section#chat #users li.new{
     background: #e67e22;
     color: white;
 }
-section#chat #users li {
+section#chat #users li,#room-stat,#users-stats {
     padding: 6px 10px;
     margin: 10px 10px;
     border-radius: 5px;

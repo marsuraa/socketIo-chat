@@ -2,7 +2,13 @@
 var socket = io();
 var i;
 
-/*** Fonctions utiles ***/
+
+
+
+
+
+
+
 
 /**
  * Scroll vers le bas de page si l'utilisateur n'est pas remonté pour lire d'anciens messages
@@ -12,6 +18,10 @@ function scrollToBottom() {
     $('html, body').animate({ scrollTop: $(document).height() }, 0);
   }
 }
+
+
+
+
 
 /*** Gestion des événements ***/
 
@@ -121,4 +131,18 @@ socket.on('update-typing', function (typingUsers) {
   for (i = 0; i < typingUsers.length; i++) {
     $('#users li.' + typingUsers[i].username + ' span.typing').show();
   }
+});
+
+
+console.log('kjhfguvd');
+$('#users').append($('<li class="room-stats">'));
+$('#users').append($('<li class="users-stats">'));
+
+socket.on('update-users-stats', function (data) {
+  $('#users li.room-stats').html('<p>' + data+'</p>');
+});
+
+socket.on('update-room-stats', function (data) {
+  $('#users li.room-stats').html('<p>' + data+'</p>');
+  $('#users li.users-stats').html('allo');
 });
